@@ -2,6 +2,12 @@ Vacancies data: https://drive.google.com/file/d/1BjgYE1SZ98_hp-jbxupHK9MkhHacer4
 
 Russian vacancies: https://drive.google.com/file/d/15iq56_CNxJ-MtxHqn2p6YFXe3w1m5FDo/view?usp=share_link
 
+Russian vacancies with skills: https://drive.google.com/file/d/1pMDqMje4MywmY7IF5Rqo516UFFsBd_A0/view?usp=sharing
+
+
+
 Train data: https://drive.google.com/file/d/1ukZ3V1eVi9JVZT3PGeJ-MSqfa7VH__t2/view?usp=sharing
+
+
 
 Test data: https://drive.google.com/file/d/16Ep1b7emvSASbPp8hkFDT-MHEwjsQ2Hl/view?usp=sharing
