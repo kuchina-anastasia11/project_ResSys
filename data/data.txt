@@ -5,3 +5,5 @@ Russian vacancies: https://drive.google.com/file/d/15iq56_CNxJ-MtxHqn2p6YFXe3w1m
 Train data: https://drive.google.com/file/d/1ukZ3V1eVi9JVZT3PGeJ-MSqfa7VH__t2/view?usp=sharing
 
 Test data: https://drive.google.com/file/d/16Ep1b7emvSASbPp8hkFDT-MHEwjsQ2Hl/view?usp=sharing
+
+Realtime test dataset: https://drive.google.com/file/d/1kijD2jOxzSiZpfvqlgkU8WF6l61wFl5k/view?usp=sharing
