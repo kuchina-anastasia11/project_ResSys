@@ -7,15 +7,18 @@ import faiss
 from tqdm import tqdm
 import torch
 import re
+from bs4 import BeautifulSoup
+import pandas as pd
+
 
 class FlagModel:
     def __init__(
-            self,
-            model_name_or_path: str = None,
-            pooling_method: str = 'cls',
-            normalize_embeddings: bool = True,
-            query_instruction_for_retrieval: str = None,
-            use_fp16: bool = True
+        self,
+        model_name_or_path: str = None,
+        pooling_method: str = "cls",
+        normalize_embeddings: bool = True,
+        query_instruction_for_retrieval: str = None,
+        use_fp16: bool = True,
     ) -> None:
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
@@ -31,7 +34,8 @@ class FlagModel:
         else:
             self.device = torch.device("cpu")
             use_fp16 = False
-        if use_fp16: self.model.half()
+        if use_fp16:
+            self.model.half()
         self.model = self.model.to(self.device)
 
         self.num_gpus = torch.cuda.device_count()
@@ -39,40 +43,60 @@ class FlagModel:
             print(f"----------using {self.num_gpus}*GPUs----------")
             self.model = torch.nn.DataParallel(self.model)
 
-    def encode_queries(self, queries: Union[List[str], str],
-                       batch_size: int = 256,
-                       max_length: int = 512,
-                       convert_to_numpy: bool = True) -> np.ndarray:
-        '''
+    def encode_queries(
+        self,
+        queries: Union[List[str], str],
+        batch_size: int = 256,
+        max_length: int = 512,
+        convert_to_numpy: bool = True,
+    ) -> np.ndarray:
+        """
         This function will be used for retrieval task
         if there is a instruction for queries, we will add it to the query text
-        '''
+        """
         if self.query_instruction_for_retrieval is not None:
             if isinstance(queries, str):
                 input_texts = self.query_instruction_for_retrieval + queries
             else:
-                input_texts = ['{}{}'.format(self.query_instruction_for_retrieval, q) for q in queries]
+                input_texts = [
+                    "{}{}".format(self.query_instruction_for_retrieval, q)
+                    for q in queries
+                ]
         else:
             input_texts = queries
-        return self.encode(input_texts, batch_size=batch_size, max_length=max_length, convert_to_numpy=convert_to_numpy)
+        return self.encode(
+            input_texts,
+            batch_size=batch_size,
+            max_length=max_length,
+            convert_to_numpy=convert_to_numpy,
+        )
 
-    def encode_corpus(self,
-                      corpus: Union[List[str], str],
-                      batch_size: int = 256,
-                      max_length: int = 512,
-                      convert_to_numpy: bool = True) -> np.ndarray:
-        '''
+    def encode_corpus(
+        self,
+        corpus: Union[List[str], str],
+        batch_size: int = 256,
+        max_length: int = 512,
+        convert_to_numpy: bool = True,
+    ) -> np.ndarray:
+        """
         This function will be used for retrieval task
         encode corpus for retrieval task
-        '''
-        return self.encode(corpus, batch_size=batch_size, max_length=max_length, convert_to_numpy=convert_to_numpy)
+        """
+        return self.encode(
+            corpus,
+            batch_size=batch_size,
+            max_length=max_length,
+            convert_to_numpy=convert_to_numpy,
+        )
 
     @torch.no_grad()
-    def encode(self,
-               sentences: Union[List[str], str],
-               batch_size: int = 256,
-               max_length: int = 512,
-               convert_to_numpy: bool = True) -> np.ndarray:
+    def encode(
+        self,
+        sentences: Union[List[str], str],
+        batch_size: int = 256,
+        max_length: int = 512,
+        convert_to_numpy: bool = True,
+    ) -> np.ndarray:
         if self.num_gpus > 0:
             batch_size = batch_size * self.num_gpus
         self.model.eval()
@@ -83,18 +107,21 @@ class FlagModel:
             input_was_string = True
 
         all_embeddings = []
-        for start_index in tqdm(range(0, len(sentences), batch_size), desc="Inference Embeddings",
-                                disable=len(sentences) < 256):
-            sentences_batch = sentences[start_index:start_index + batch_size]
+        for start_index in tqdm(
+            range(0, len(sentences), batch_size),
+            desc="Inference Embeddings",
+            disable=len(sentences) < 256,
+        ):
+            sentences_batch = sentences[start_index : start_index + batch_size]
             inputs = self.tokenizer(
                 sentences_batch,
                 padding=True,
                 truncation=True,
-                return_tensors='pt',
+                return_tensors="pt",
                 max_length=max_length,
             ).to(self.device)
             last_hidden_state = self.model(**inputs, return_dict=True).last_hidden_state
-            embeddings = self.pooling(last_hidden_state, inputs['attention_mask'])
+            embeddings = self.pooling(last_hidden_state, inputs["attention_mask"])
             if self.normalize_embeddings:
                 embeddings = torch.nn.functional.normalize(embeddings, dim=-1)
             embeddings = cast(torch.Tensor, embeddings)
@@ -112,26 +139,29 @@ class FlagModel:
             return all_embeddings[0]
         return all_embeddings
 
-    def pooling(self,
-                last_hidden_state: torch.Tensor,
-                attention_mask: torch.Tensor = None):
-        if self.pooling_method == 'cls':
+    def pooling(
+        self, last_hidden_state: torch.Tensor, attention_mask: torch.Tensor = None
+    ):
+        if self.pooling_method == "cls":
             return last_hidden_state[:, 0]
-        elif self.pooling_method == 'mean':
-            s = torch.sum(last_hidden_state * attention_mask.unsqueeze(-1).float(), dim=1)
+        elif self.pooling_method == "mean":
+            s = torch.sum(
+                last_hidden_state * attention_mask.unsqueeze(-1).float(), dim=1
+            )
             d = attention_mask.sum(dim=1, keepdim=True).float()
             return s / d
-        
-def experience_code(row) :
-    if row == 'moreThan6':
+
+
+def experience_code(row):
+    if row == "moreThan6":
         return 4
-    elif row == 'between3And6':
+    elif row == "between3And6":
         return 3
-    elif row == 'between1And3':
-        return  2
+    elif row == "between1And3":
+        return 2
     else:
         return 1
-    
+
 
 def name_processing(s: str):
     pattern1 = r"\((.*?)\)"
@@ -139,10 +169,15 @@ def name_processing(s: str):
     pattern2 = r"\s+"
     result = re.sub(pattern2, " ", s_new)
     result = result.strip()
-    result = [i.strip() for i in re.split(r'/|//|\\|\\\\', result) if len(i.strip())>0]
-    if len(result)>0:
+    result = [
+        i.strip() for i in re.split(r"/|//|\\|\\\\", result) if len(i.strip()) > 0
+    ]
+    if len(result) > 0:
         return result[0]
 
+
+def desc_processing(s: str):
+    return BeautifulSoup(s).get_text()
 
 
 def create_index(embeddings, use_gpu):
@@ -156,17 +191,20 @@ def create_index(embeddings, use_gpu):
     index.add(embeddings)
     return index
 
-def batch_search(index,
-                 query,
-                 topk: int = 200,
-                 batch_size: int = 64):
+
+def batch_search(index, query, topk: int = 200, batch_size: int = 64):
     all_scores, all_inxs = [], []
-    for start_index in tqdm(range(0, len(query), batch_size), desc="Batches", disable=len(query) < 256):
-        batch_query = query[start_index:start_index + batch_size]
-        batch_scores, batch_inxs = index.search(np.asarray(batch_query, dtype=np.float32), k=topk)
+    for start_index in tqdm(
+        range(0, len(query), batch_size), desc="Batches", disable=len(query) < 256
+    ):
+        batch_query = query[start_index : start_index + batch_size]
+        batch_scores, batch_inxs = index.search(
+            np.asarray(batch_query, dtype=np.float32), k=topk
+        )
         all_scores.extend(batch_scores.tolist())
         all_inxs.extend(batch_inxs.tolist())
     return all_scores, all_inxs
+
 
 def find_nearest_emb(name, names, model):
     queries = [name]
@@ -175,13 +213,53 @@ def find_nearest_emb(name, names, model):
     q_vecs = model.encode_queries(queries, batch_size=256)
     index = create_index(p_vecs, use_gpu=False)
     _, all_inxs = batch_search(index, q_vecs, topk=50)
-    
+
     for i, data in enumerate(queries):
-        #query = data['query']
+        # query = data['query']
         inxs = all_inxs[i][0:50]
         filtered_inx = []
         for inx in inxs:
-            if inx == -1: break
+            if inx == -1:
+                break
             filtered_inx.append(inx)
 
     return [corpus[i] for i in filtered_inx]
+
+
+def action_type_processor(action_type, salary):
+
+    if np.isnan(np.nanmean(salary)):
+        return [100000, 100000, 100000]
+    else:
+        data = [[], [], []]
+        for i in range(len(action_type)):
+            data[action_type[i] - 1].append(salary[i])
+        if len(data[0]):
+            data[0] = np.nanmean(data[0])
+        else:
+            data[0] = np.nanmean(salary)
+        if len(data[1]):
+            data[1] = np.nanmean(data[1])
+        else:
+            data[1] = np.nanmean(salary)
+        if len(data[0]):
+            data[2] = np.nanmean(data[2])
+        else:
+            data[2] = np.nanmean(salary)
+        return data
+
+
+def create_data():
+    tmp = pd.DataFrame()
+    tmp["mean_names"] = [0.2]
+    tmp["mean_desc"] = [0.2]
+    tmp["user_salary_from"] = [15000]
+    tmp["user_salary_to"] = [80000]
+    tmp["vacancy_salary_from"] = [150000]
+    tmp["vacancy_salary_to"] = [500000]
+    tmp["intersection_keyskill"] = [0]
+
+
+def key_skills_coverage(all, users):
+    intersection_l = len(set.intersection(users, all))
+    return len(all) / intersection_l
