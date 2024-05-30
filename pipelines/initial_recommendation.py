@@ -19,6 +19,7 @@ class initial_recommendation():
             self.names_d[names[i]].append(vacancy_id[i])
         
         self.nlp_cluster_size = 15000
+        self.salary_coeff = 0.8
     def recomend(self, name: str, compensation_from: int, area_id: str, workExperience: str):
         data_vacancy = self.data_vacancy
         data_vacancy = data_vacancy.loc[data_vacancy['area_id'] == area_id]
@@ -26,7 +27,7 @@ class initial_recommendation():
         if len(data_vacancy)>self.nlp_cluster_size:
             data_vacancy = data_vacancy.loc[data_vacancy['workExperience'] <= experience_code(workExperience)]
         if len(data_vacancy)>self.nlp_cluster_size: 
-            data_vacancy = data_vacancy.loc[data_vacancy['compensation_from'] >= compensation_from * 0.8]
+            data_vacancy = data_vacancy.loc[data_vacancy['compensation_from'] >= compensation_from * self.salary_coeff]
 
         names = list(data_vacancy['name'])
         res = []
@@ -41,8 +42,8 @@ class initial_recommendation():
                 res.extend(self.names_d[i])
             return res
         
-        a = find_nearest_emb(name, names, self.model)
-        for i in a:
+        vacancy_names = find_nearest_emb(name, names, self.model)
+        for i in vacancy_names:
             res.extend(self.names_d[i])
         return res
         
