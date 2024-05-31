@@ -12,7 +12,7 @@ from utils import (
 from sentence_transformers import SentenceTransformer
 
 
-class predictor:
+class predictor():
     def __init__(
         self,
         data_vacancy: pd.DataFrame,
