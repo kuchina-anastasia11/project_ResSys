@@ -45,6 +45,7 @@ def get_user_info(connection,cursor, user_id: str) -> dict:
         return user_info
     else:
         return None
+        
     
 def get_last_session_info(connection, cursor,user_id: str) -> dict:
     cursor = connection.cursor()
@@ -62,11 +63,30 @@ def get_last_session_info(connection, cursor,user_id: str) -> dict:
     else:
         return None
 
+import sqlite3
+
+def delete_user(connection, cursor, user_id):
+    try:
+        sql_delete_user = "DELETE FROM users WHERE user_id = ?"
+        cursor.execute(sql_delete_user, (user_id,))
+        connection.commit()
+        print(f"Пользователь с user_id = {user_id} успешно удален из таблицы users.")
+    except sqlite3.Error as e:
+        print(f"Ошибка при удалении пользователя: {e}")
+
+
+def delete_sessions(connection, cursor, user_id):
+    try:
+        sql_delete_sessions = "DELETE FROM sessions WHERE user_id = ?"
+        cursor.execute(sql_delete_sessions, (user_id,))
+        connection.commit()
+        print(f"Все сессии пользователя с user_id = {user_id} успешно удалены из таблицы sessions.")
+    except sqlite3.Error as e:
+        print(f"Ошибка при удалении сессий: {e}")
+
 
 def extract_text_from_pdf(file_path: str) -> str:
-    print('hi 24')
     text = ""
-    print('25')
     with open(file_path, "rb") as f:
         pdf_reader = PyPDF2.PdfReader(f)
         for page_num in range(len(pdf_reader.pages)):
