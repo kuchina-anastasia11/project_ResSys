@@ -44,7 +44,7 @@ class initial_recommendation():
         elif len(names)<50 and len(names)>=5:
             for i in names:
                 res.extend(self.names_d[i])
-            return res
+            #return res
         
         vacancy_names = find_nearest_emb(name, names, self.model)
         for i in vacancy_names:
