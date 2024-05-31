@@ -29,6 +29,27 @@ A Telegram bot that offers personalized job recommendations on the Russian marke
 The datasets used can be found in [data/data.txt](./data/data.txt).
 
 
+## Try our model
+If you want to try our model for your predictions, import it like this:
+
+```shell
+pip install -r requirements.txt
+
+# Initial recommendation model (based on resume data)
+from pipelines.initial_recommendation import initial_recommendation
+
+r = initial_recommendation(vacancy_data)
+vacancy_ids = r.recommend(vacancy_name, salary, region_id, work_experience, key_skills)
+
+
+# Secondary recommendation model (taking previous job interactions into account)
+from pipelines.predict import predictor
+
+r = predictor(vacancy_data)
+vacancy_ids = r.recommend(vacancy_name, region_id, work_experience, action_type, vacancy_id_list, key_skills)
+```
+
+
 ## Team
 
 - [Anastasia Kuchina](https://github.com/kuchina-anastasia11)
