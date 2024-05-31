@@ -2,6 +2,11 @@
 
 Телеграм-бот с рекомендательной системой вакансий
 
+Ссылка: [HAHA.ru](https://t.me/haha_project_bot)
+
+
+
+
 ![Bot screenshot](./data/photo_2024-03-29_20-17-58.jpg)
 
 ## Описание
