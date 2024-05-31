@@ -7,6 +7,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor
+from aiogram.utils.markdown import link
 import os
 import random
 import openai
@@ -19,60 +20,14 @@ import datetime
 import logging
 
 from initial_recommendation import initial_recommendation
+from predict import predictor
+from db import insert_session, insert_user, get_session_count, get_last_session_info, get_user_info
+from parse_resume import extract_text_from_pdf, extract_resume_info, extract_key_skills
 
-from db import insert_session
-
-def insert_user(connection, cursor, user_id: str, experience: str, id_region: str, compensation_from : int, name : str, key_skills: str):
-    cursor.execute("INSERT INTO users(user_id, experience, area_regionId, compensation_from, name, keySkills) VALUES(?, ?, ?, ?, ?, ?);", (user_id, experience, id_region, compensation_from, name, key_skills))
-    connection.commit()
-
-def extract_text_from_pdf(file_path: str) -> str:
-    print('hi 24')
-    text = ""
-    print('25')
-    with open(file_path, "rb") as f:
-        pdf_reader = PyPDF2.PdfReader(f)
-        for page_num in range(len(pdf_reader.pages)):
-            page = pdf_reader.pages[page_num]
-            text += page.extract_text()
-    print(text)
-    return text
-
-def extract_resume_info(resume_text, api_key):
-    prompt = f"""
-    Это текст резюме. Ответ верни в виде "ответ;ответ;ответ" - без каких-лтбо еще знаков. Найди в нем информацию, описанную ниже и верни в нужном виде :
-    город, в котором была последняя работа - только город
-    название последней должности - только название
-    общий опыт работы, в годах - только числа
-
-    {resume_text}
-    """
-    openai.api_key = api_key
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-
-    result = response['choices'][0]['message']['content'].strip()
-    return result
-
-def extract_key_skills(resume_text):
-    stop_words = set(nltk.corpus.stopwords.words('russian')).union(nltk.corpus.stopwords.words('english'))
-    word_tokens = nltk.tokenize.word_tokenize(resume_text)
-    filtered_tokens = [w for w in word_tokens if (w not in stop_words and  w.isalpha())]
-    bigrams_trigrams = list(map(' '.join, nltk.everygrams(filtered_tokens, 2, 3)))
-    key_skills_result = set()
-    for token in filtered_tokens:
-        if token.lower() in key_skills_list:
-            key_skills_result.add(token)
-    for ngram in bigrams_trigrams:
-        if ngram.lower() in key_skills_list:
-            key_skills_result.add(ngram)
- 
-    return list(key_skills_result)
+import os
+api_key = os.getenv('API_KEY')
+TOKEN = os.getenv('TOKEN')
+DATA_PTH =  os.getenv('DATA_PTH')
 
 
 logging.basicConfig(level=logging.INFO)
@@ -81,6 +36,7 @@ nest_asyncio.apply()
 
 kb1 = [
     [types.KeyboardButton(text="Авторизация"),
+     types.KeyboardButton(text='Восстановить свой user_id'),
      types.KeyboardButton(text="Регистрация")],
 ]
 autorization_markup = types.ReplyKeyboardMarkup(
@@ -117,25 +73,26 @@ favourite_markup = types.ReplyKeyboardMarkup(
 )
 
 
-TOKEN = ''
-api_key = ""
+
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
-connection = sqlite3.connect('/home/jovyan/shares/SR004.nfs2/amaksimova/exp/final/haha.db', check_same_thread=False)
+connection = sqlite3.connect(DATA_PTH+'/haha.db', check_same_thread=False)
 cursor = connection.cursor()
 df_vacancies_clean = pd.read_sql_query("SELECT * FROM vacancies_ru", connection)
 #df_vacancies= pd.read_sql_query("SELECT * FROM vacancies_ru", connection).reset_index('vacancy_id') #search by loc[]
 names_to_region_id = pd.read_sql_query("SELECT * FROM names_to_region_id", connection)
 first_recommendation = initial_recommendation(df_vacancies_clean)
+recommendation = predictor(df_vacancies_clean)
 
-with open('/home/jovyan/shares/SR004.nfs2/amaksimova/exp/final/data/keys.txt', 'r') as file:
+with open(DATA_PTH+'/data/keys.txt', 'r') as file:
     key_skills_list = file.read().lower().split("\n")
 
 def initial_recommendation_for_user(name : str, compensation_from : int, area_id : str, expireince : str, keySkills : list) -> list[str]:
-    #return  first_recommendation.recomend(name, compensation_from,area_id , experience)
-    return  first_recommendation.recomend("программист", 50000, '1', 'between1And3', [])
+    return  first_recommendation.recomend(name, compensation_from, area_id , expireince, keySkills)
 
+def recommendation_for_user(name : str, area_id : str, expireince : str, action_list : list, vacancy_list : list, keySkills: list) -> list[str]:
+    return  recommendation.recomend(name, area_id,expireince, action_list, vacancy_list, keySkills)
 
 user_state = {}
 
@@ -158,6 +115,10 @@ async def start(message: types.Message):
 async def handle_authorization(message: types.Message):
     await message.answer('Пожалуйста, введите свой номер:', reply_markup=autorization_markup)
 
+@dp.message_handler(lambda message: message.text == 'Восстановить свой user_id')
+async def handle_authorization(message: types.Message):
+    await message.answer(f'Пожалуйста, ваш user_id:{message.from_user.id}. Теперь можете авторизоваться!', reply_markup=autorization_markup)
+
 @dp.message_handler(lambda message: message.text.isdigit())
 async def handle_number(message: types.Message):
     user_id = message.from_user.id
@@ -174,8 +135,10 @@ async def handle_number(message: types.Message):
     user_state[user_id] = {
         'number': number,
         'index': 0,
+        'link' : '',
         'vacancies': [],
         'action_type' : [],
+        'prev_action' : '',
         'region' : user_row['area_regionId'].values[0],
         'name' : user_row['name'].values[0],
         'salary' : int(user_row['compensation_from'].values[0]),
@@ -202,7 +165,10 @@ async def handle_manual_input_option(message: types.Message):
 async def handle_next_vacancy(message: types.Message):
     user_id = message.from_user.id
     state_data = user_state[user_id]
+    if state_data['prev_action'] == 'Следующая':
+        state_data['vacancies'].pop(-1)
     state_data['index'] += 1
+    state_data['prev_action'] = 'Следующая'
     await send_next_vacancy(user_id)
 
 @dp.message_handler(lambda message: message.text == 'Полное описание')
@@ -211,7 +177,7 @@ async def handle_full_description(message: types.Message):
     state_data = user_state[user_id]
     current_vacancy = state_data['vacancies'][-1]
     state_data['action_type'].append(2)
-    
+    state_data['prev_action'] = 'Полное описание'
     desc = BeautifulSoup(str(df_vacancies_clean.query('vacancy_id == @current_vacancy')['description'].values[0])).get_text()
     await message.answer(f'Описание вакансии:\n{desc}')
     await message.answer('Выберите действие:', reply_markup=favourite_markup)
@@ -221,7 +187,9 @@ async def handle_add_to_favorites(message: types.Message):
     user_id = message.from_user.id
     state_data = user_state[user_id]
     current_vacancy = state_data['vacancies'][-1]
+    state_data['vacancies'].append(current_vacancy)
     state_data['action_type'].append(3)
+    state_data['prev_action'] = 'Добавить в избранное'
     vacancy_name = str(df_vacancies_clean.query('vacancy_id == @current_vacancy')['name'].values[0])
     await message.answer(f'Вакансия {vacancy_name} добавлена в избранное.', reply_markup=favourite_markup)
 
@@ -229,9 +197,10 @@ async def handle_add_to_favorites(message: types.Message):
 async def handle_response(message: types.Message):
     user_id = message.from_user.id
     state_data = user_state[user_id]
-    current_vacancy = state_data['vacancies'][-1]
     state_data['action_type'].append(1)
-    await message.answer('Спасибо за отклик! Надеемся, работодателя с Вами свяжется!', reply_markup=favourite_markup)
+    state_data['prev_action'] = 'Отклик'
+
+    await message.answer(f"[Ссылка на вакансию]({state_data['link']})", parse_mode="MarkdownV2", reply_markup=favourite_markup)
 
 @dp.message_handler(state=RegistrationStates.waiting_for_resume, content_types=['document'])
 async def handle_resume(message: types.Message, state: FSMContext):
@@ -241,7 +210,6 @@ async def handle_resume(message: types.Message, state: FSMContext):
         file_path = file_info.file_path
         downloaded_file = await bot.download_file(file_path)
         src = os.path.join(os.path.expanduser('~'), 'Downloads', message.document.file_name)
-        print(src)
         with open(src, 'wb') as f:
             f.write(downloaded_file.getvalue())
 
@@ -318,7 +286,7 @@ async def handle_salary(message: types.Message, state: FSMContext):
         exp = 'moreThan6'
     
     insert_user(connection, cursor, str(number), str(exp), str(region), int(user_data['salary'])+0.0, str(user_data['job_title']), str(user_data['key_skills']))
-    await message.answer(f'Ваши данные сохранены.\n Вот ваш айдишник:{number}. \n Вам необходимо авторизоваться: для этого отправьте свой айдишник еще раз!')
+    await message.answer(f'Ваши данные сохранены.\n Вот ваш айдишник:{number}. \n Вам необходимо авторизоваться: для этого еще раз отправьте "/start"!')
     await state.finish()
     
 
@@ -329,18 +297,26 @@ async def send_next_vacancy(user_id):
         return
     
     # from predict_function
-    #if( 0 session )
-    try:
-        vacancies_list = initial_recommendation_for_user(state_data['name'], state_data['salary'], state_data['region'] , state_data['experience'], state_data['keySkills'])
-    except Exception as e :
-        print(e)
+    
+    if get_session_count(connection, cursor, state_data['number']) == 0:
+        try:
+            vacancies_list = list(set(initial_recommendation_for_user(state_data['name'], state_data['salary'], state_data['region'] , state_data['experience'], state_data['keySkills'])))
+        except Exception as e :
+            print(e)
+    else:
+        try:
+            user_info = get_user_info(connection, cursor, state_data['number'])
+            last_session_info = get_last_session_info(connection, cursor, state_data['number'])
+            vacancies_list = list(set(recommendation_for_user(user_info['name'], user_info['area_regionId'], user_info['experience'], eval(last_session_info['action_type']), eval(last_session_info['vacancy_id']), eval(user_info['keySkills']))))
+        except Exception as e :
+            print(e)
 
-    #else - vtoroi predict
+        
     index = state_data['index']
 
     if index >= len(vacancies_list):
-        await bot.send_message(user_id, 'Thats all, goodbye!')
-        insert_session(connection, cursor, str(state_data['number']), (str(state_data['user_id'])), str(state_data['vacancies']),str(state_data['action_type']), str(datetime.datetime.now()))
+        insert_session(connection, cursor, str(state_data['number']), str(int(state_data['number']) +random.randint(130, 481938402)), str(state_data['vacancies'][:(len(state_data['action_type']))]), str(state_data['action_type']), str(datetime.datetime.now()))
+        await bot.send_message(user_id, 'Пока что это все!\nЕсли хотите получить новую порцию рекомендаций необходимо еще раз отправить "/start"')
         del user_state[user_id]
         return
 
@@ -348,9 +324,11 @@ async def send_next_vacancy(user_id):
     vacancy_name = str(df_vacancies_clean.query('vacancy_id == @vacancy_number')['name'].values[0])
     salary = (df_vacancies_clean.query('vacancy_id == @vacancy_number')['compensation_from'].values[0]) or '-'
     state_data['vacancies'].append(vacancy_number)
+    state_data['prev_action'] = ''
+    state_data['link'] = str(df_vacancies_clean.query('vacancy_id == @vacancy_number')['alternate_url'].values[0]) # link('Ссылка на вакансию', state_data['link'])
     await bot.send_message(user_id, f'Вакансия: {vacancy_name}\nЗарплата: {salary}', reply_markup=common_markup)
 
-# Запуск бота
+
 if __name__ == "__main__":
     dp.middleware.setup(LoggingMiddleware())
     executor.start_polling(dp, skip_updates=True)
