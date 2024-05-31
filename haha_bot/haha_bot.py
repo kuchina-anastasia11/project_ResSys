@@ -9,6 +9,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.utils import executor
 from aiogram.utils.markdown import link
 import os
+import numpy as np 
 import random
 import openai
 import PyPDF2
@@ -21,7 +22,7 @@ import logging
 
 from initial_recommendation import initial_recommendation
 from predict import predictor
-from db import insert_session, insert_user, get_session_count, get_last_session_info, get_user_info
+from db import insert_session, insert_user, get_session_count, get_last_session_info, get_user_info, delete_user, delete_sessions
 from parse_resume import extract_text_from_pdf, extract_resume_info, extract_key_skills
 
 import os
@@ -109,28 +110,29 @@ class RegistrationStates(StatesGroup):
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    await message.answer('Здравствуйте! Пожалуйста, введите свой номер или зарегистрируйтесь!', reply_markup=autorization_markup)
+    await message.answer('Здравствуйте! Пожалуйста, введите свой номер или зарегистрируйтесь!\nЕсли Вы уже регистрировались и хотите изменить свои данные, то нажмите кнопку "Регистрация"', reply_markup=autorization_markup)
 
 @dp.message_handler(lambda message: message.text == 'Авторизация')
 async def handle_authorization(message: types.Message):
     await message.answer('Пожалуйста, введите свой номер:', reply_markup=autorization_markup)
-
-@dp.message_handler(lambda message: message.text == 'Восстановить свой user_id')
-async def handle_authorization(message: types.Message):
-    await message.answer(f'Пожалуйста, ваш user_id:{message.from_user.id}. Теперь можете авторизоваться!', reply_markup=autorization_markup)
-
-@dp.message_handler(lambda message: message.text.isdigit())
-async def handle_number(message: types.Message):
+    await AutorizationStates.waiting_for_number.set()
+    
+@dp.message_handler(state=AutorizationStates.waiting_for_number)
+async def handle_number(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     number = str(message.from_user.id)
     if not message.text.isdigit():
-        await message.answer('Пожалуйста, введите корректный номер, состоящий только из цифр:')
-        return
+        if message.text == 'Восстановить свой user_id':
+            await message.answer(f'Пожалуйста, ваш user_id:{message.from_user.id}. Теперь можете авторизоваться!', reply_markup=autorization_markup)
+            return
+        else:
+            await message.answer('Пожалуйста, введите корректный номер, состоящий только из цифр:')
+            return
     try:
         df_users = pd.read_sql_query("SELECT * FROM users", connection)
         user_row = df_users.loc[df_users['user_id'] == number]
     except: 
-        print('упс, не нашли вас в базе')
+        print('Кажется, вы еще не зарегистрированы!\nНапишите "/start", а после нажмите кнопку "Регистрация')
     
     user_state[user_id] = {
         'number': number,
@@ -147,8 +149,21 @@ async def handle_number(message: types.Message):
     }
     await send_next_vacancy(user_id)
 
+@dp.message_handler(lambda message: message.text == 'Восстановить свой user_id')
+async def handle_authorization(message: types.Message):
+    await message.answer(f'Пожалуйста, ваш user_id:{message.from_user.id}. Теперь можете авторизоваться!', reply_markup=autorization_markup)
+
 @dp.message_handler(lambda message: message.text == 'Регистрация')
 async def handle_registration(message: types.Message):
+    print(get_user_info(connection, cursor,  str(message.from_user.id)))
+    if (get_user_info(connection, cursor,  str(message.from_user.id))) != None:
+        print('hi')
+        delete_user(connection, cursor,  str(message.from_user.id))
+        print('bye')
+    if get_session_count(connection, cursor, str(message.from_user.id)) != 0:
+        print('hii')
+        delete_sessions(connection, cursor,  str(message.from_user.id))
+        print('byee')
     await message.answer('Пожалуйста, выберите способ регистрации:', reply_markup=registration_markup)
 
 @dp.message_handler(lambda message: message.text == 'Отправить резюме')
@@ -286,8 +301,10 @@ async def handle_salary(message: types.Message, state: FSMContext):
         exp = 'moreThan6'
     
     insert_user(connection, cursor, str(number), str(exp), str(region), int(user_data['salary'])+0.0, str(user_data['job_title']), str(user_data['key_skills']))
-    await message.answer(f'Ваши данные сохранены.\n Вот ваш айдишник:{number}. \n Вам необходимо авторизоваться: для этого еще раз отправьте "/start"!')
+    await message.answer(f'Ваши данные сохранены.\nВот ваш айдишник: {number}. \nВам необходимо авторизоваться: для этого еще раз отправьте "/start"!')
     await state.finish()
+
+
     
 
 async def send_next_vacancy(user_id):
@@ -297,7 +314,7 @@ async def send_next_vacancy(user_id):
         return
     
     # from predict_function
-    
+    vacancies_list = []
     if get_session_count(connection, cursor, state_data['number']) == 0:
         try:
             vacancies_list = list(set(initial_recommendation_for_user(state_data['name'], state_data['salary'], state_data['region'] , state_data['experience'], state_data['keySkills'])))
@@ -328,7 +345,7 @@ async def send_next_vacancy(user_id):
     state_data['link'] = str(df_vacancies_clean.query('vacancy_id == @vacancy_number')['alternate_url'].values[0]) # link('Ссылка на вакансию', state_data['link'])
     await bot.send_message(user_id, f'Вакансия: {vacancy_name}\nЗарплата: {salary}', reply_markup=common_markup)
 
-
+# Запуск бота
 if __name__ == "__main__":
     dp.middleware.setup(LoggingMiddleware())
     executor.start_polling(dp, skip_updates=True)
