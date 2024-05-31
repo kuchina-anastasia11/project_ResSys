@@ -42,7 +42,7 @@ class predictor():
             ddesc.append(self.cos_sim(desc_processing(v), vacancy_desc))
         return sum(nnames) / len(nnames), sum(ddesc) / len(ddesc)
 
-    def recomend(
+    def recommend(
         self,
         name: str,
         area_id: str,
