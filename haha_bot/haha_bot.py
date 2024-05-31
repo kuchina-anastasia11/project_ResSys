@@ -123,7 +123,7 @@ async def handle_number(message: types.Message, state: FSMContext):
     number = str(message.from_user.id)
     if not message.text.isdigit():
         if message.text == 'Восстановить свой user_id':
-            await message.answer(f'Пожалуйста, ваш user_id:{message.from_user.id}. Теперь можете авторизоваться!', reply_markup=autorization_markup)
+            await message.answer(f'Пожалуйста, ваш user_id: {message.from_user.id}. Теперь можете авторизоваться!', reply_markup=autorization_markup)
             return
         else:
             await message.answer('Пожалуйста, введите корректный номер, состоящий только из цифр:')
