@@ -90,10 +90,10 @@ with open(DATA_PTH+'/data/keys.txt', 'r') as file:
     key_skills_list = file.read().lower().split("\n")
 
 def initial_recommendation_for_user(name : str, compensation_from : int, area_id : str, expireince : str, keySkills : list) -> list[str]:
-    return  first_recommendation.recomend(name, compensation_from, area_id , expireince, keySkills)
+    return  first_recommendation.recommend(name, compensation_from, area_id , expireince, keySkills)
 
 def recommendation_for_user(name : str, area_id : str, expireince : str, action_list : list, vacancy_list : list, keySkills: list) -> list[str]:
-    return  recommendation.recomend(name, area_id,expireince, action_list, vacancy_list, keySkills)
+    return  recommendation.recommend(name, area_id,expireince, action_list, vacancy_list, keySkills)
 
 user_state = {}
 
@@ -128,6 +128,7 @@ async def handle_number(message: types.Message, state: FSMContext):
         else:
             await message.answer('Пожалуйста, введите корректный номер, состоящий только из цифр:')
             return
+    await state.finish()
     try:
         df_users = pd.read_sql_query("SELECT * FROM users", connection)
         user_row = df_users.loc[df_users['user_id'] == number]
