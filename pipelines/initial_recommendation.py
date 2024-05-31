@@ -24,7 +24,7 @@ class initial_recommendation():
         self.nlp_cluster_size = 15000
         self.salary_coeff = 0.8
 
-    def recomend(self, name: str, compensation_from: int, area_id: str, workExperience: str, keySkills: list): 
+    def recommend(self, name: str, compensation_from: int, area_id: str, workExperience: str, keySkills: list): 
         data_vacancy = self.data_vacancy
         data_vacancy = data_vacancy.loc[data_vacancy['area_id'] == area_id]
         
