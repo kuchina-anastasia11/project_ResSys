@@ -19,14 +19,81 @@ def create_table(connection, create_table_sql):
 
 
 # Функция для обновления sessions(логи добавятся позже)
+
 def insert_session(connection, cursor, user_id: str, session_id : str, vacancy_list : str, actions: str, action_dt : str):
         cursor.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, ?)", (user_id, session_id, vacancy_list, actions, action_dt))
         connection.commit()
 
-
 def insert_user(connection, cursor, user_id: str, experience: str, id_region: str, compensation_from : int, name : str, key_skills: str):
     cursor.execute("INSERT INTO users(user_id, experience, area_regionId, compensation_from, name, keySkills) VALUES(?, ?, ?, ?, ?, ?);", (user_id, experience, id_region, compensation_from, name, key_skills))
     connection.commit()
+
+def get_session_count(connection, cursor, user_id: str) -> int:
+    cursor.execute("SELECT user_id FROM sessions WHERE user_id = ?", (user_id,))
+    result = cursor.fetchone()
+    if result:
+        return result[0]
+    return 0
+
+def get_user_info(connection,cursor, user_id: str) -> dict:
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    user_row = cursor.fetchone()
+    if user_row:
+        columns = [desc[0] for desc in cursor.description]
+        user_info = dict(zip(columns, user_row))
+        return user_info
+    else:
+        return None
+        
+    
+def get_last_session_info(connection, cursor,user_id: str) -> dict:
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT * FROM sessions
+        WHERE user_id = ?
+        ORDER BY action_dt DESC
+        LIMIT 1
+    """, (user_id,))
+    session_row = cursor.fetchone()
+    if session_row:
+        columns = [desc[0] for desc in cursor.description]
+        session_info = dict(zip(columns, session_row))
+        return session_info
+    else:
+        return None
+
+import sqlite3
+
+def delete_user(connection, cursor, user_id):
+    try:
+        sql_delete_user = "DELETE FROM users WHERE user_id = ?"
+        cursor.execute(sql_delete_user, (user_id,))
+        connection.commit()
+        print(f"Пользователь с user_id = {user_id} успешно удален из таблицы users.")
+    except sqlite3.Error as e:
+        print(f"Ошибка при удалении пользователя: {e}")
+
+
+def delete_sessions(connection, cursor, user_id):
+    try:
+        sql_delete_sessions = "DELETE FROM sessions WHERE user_id = ?"
+        cursor.execute(sql_delete_sessions, (user_id,))
+        connection.commit()
+        print(f"Все сессии пользователя с user_id = {user_id} успешно удалены из таблицы sessions.")
+    except sqlite3.Error as e:
+        print(f"Ошибка при удалении сессий: {e}")
+
+
+def extract_text_from_pdf(file_path: str) -> str:
+    text = ""
+    with open(file_path, "rb") as f:
+        pdf_reader = PyPDF2.PdfReader(f)
+        for page_num in range(len(pdf_reader.pages)):
+            page = pdf_reader.pages[page_num]
+            text += page.extract_text()
+    print(text)
+    return text
 
 # Функция для обновления таблицы vacancies 
 def update_vacancies_table(connection, csv_file):
@@ -91,7 +158,7 @@ if __name__ == '__main__':
         create_table(connection, create_users_table_sql)
         create_table(connection, create_sessions_table_sql)
 
-        pandas.read_csv('../final/data/vacancy_hh_dataset_all.csv').to_sql("vacancies_ru", connection, if_exists='replace', index=False)
+        pandas.read_csv('../final/data/vacancy_hh_dataset_all_new.csv').to_sql("vacancies_ru", connection, if_exists='replace', index=False)
         # add mapping id_region
         pandas.read_csv('../final/data/names_to_region_id.csv').to_sql("names_to_region_id", connection, if_exists='replace', index=False)
         connection.commit()
