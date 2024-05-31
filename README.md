@@ -2,7 +2,7 @@
 
 Telegram bot with a job recommendation system.
 
-Ссылка: [HAHA.ru](https://t.me/haha_project_bot) (may be temporarily unavailable)
+Link: [HAHA.ru](https://t.me/haha_project_bot) (may be temporarily unavailable)
 
 
 
