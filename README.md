@@ -25,6 +25,10 @@ A Telegram bot that offers personalized job recommendations on the Russian marke
 4. Subsequent recommendations take into account the user's interaction with previously suggested job vacancies.
 
 
+## Data
+The datasets used can be found in [data/data.txt](./data/data.txt).
+
+
 ## Team
 
 - [Anastasia Kuchina](https://github.com/kuchina-anastasia11)
