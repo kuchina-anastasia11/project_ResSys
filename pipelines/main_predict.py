@@ -70,7 +70,7 @@ class predictor():
             action_type_processor(action_type, users_vacancy_salary_to)
         )[0]
 
-        pred_id = self.initial_recommendator.recomend(
+        pred_id = self.initial_recommendator.recommend(
             name, pred_salary, area_id, workExperience, keySkills
         )
         if len(pred_id) > 10:
